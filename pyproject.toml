@@ -1,0 +1,63 @@
+[project]
+name = "ai-chat"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiologger>=0.7.0",
+    "alembic>=1.14.1",
+    "asyncpg>=0.30.0",
+    "fastapi[all]>=0.115.10",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.8.1",
+    "pytz>=2025.1",
+    "sqlalchemy>=2.0.38",
+    "types-pytz>=2025.1.0.20250204",
+    "uvicorn>=0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+    "isort",
+    "mypy",
+    "pytest",
+    "pytest-asyncio",
+]
+
+[project.scripts]
+dev = "scripts.commands:dev"
+prod = "scripts.commands:prod"
+migrate = "scripts.commands:migrate"
+lint = "scripts.commands:lint"
+format = "scripts.commands:format"
+check = "scripts.commands:check"
+test = "scripts.commands:test"
+serve = "scripts.commands:serve"
+start = "scripts.commands:start_all"
+
+[tool.setuptools]
+packages = ["app", "scripts"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::pydantic.PydanticDeprecatedSince20"
+]
+markers = [
+    "integration: marks tests as integration tests"
+]
+
+[tool.mypy]
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+
+[[tool.mypy.overrides]]
+module = "app.core.migrations.*"
+ignore_errors = true
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
