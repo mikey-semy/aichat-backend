@@ -1,4 +1,3 @@
-import os
 from typing import Any, Dict, List
 
 from pydantic import PostgresDsn, SecretStr
@@ -6,50 +5,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.lifespan import lifespan
+from app.core.settings.logging import LoggingSettings
+from app.core.settings.paths import PathConfig
 
-
-class LoggingSettings(BaseSettings):
-    """Конфигурация логирования"""
-
-    LOG_FORMAT: str = "pretty"
-    LOG_FILE: str = "app.log"
-    LEVEL: str = "DEBUG"
-    MAX_BYTES: int = 10485760  # 10MB
-    BACKUP_COUNT: int = 5
-    ENCODING: str = "utf-8"
-    FILE_MODE: str = "a"
-    FILE_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    PRETTY_FORMAT: str = (
-        "\033[1;36m%(asctime)s\033[0m - \033[1;32m%(name)s\033[0m - %(levelname)s - %(message)s"
-    )
-
-    JSON_FORMAT: dict = {
-        "timestamp": "%(asctime)s",
-        "level": "%(levelname)s",
-        "module": "%(module)s",
-        "function": "%(funcName)s",
-        "message": "%(message)s",
-    }
-
-    def to_dict(self) -> dict:
-        return {
-            "level": self.LEVEL,
-            "filename": self.LOG_FILE,
-            "maxBytes": self.MAX_BYTES,
-            "backupCount": self.BACKUP_COUNT,
-            "encoding": self.ENCODING,
-            "filemode": self.FILE_MODE,
-            "format": self.PRETTY_FORMAT if self.LOG_FORMAT == "pretty" else None,
-            "json_format": self.JSON_FORMAT if self.LOG_FORMAT == "json" else None,
-            "force": True,
-            "file_json": True,
-        }
-
+env_file_path, app_env = PathConfig.get_env_file_and_type()
 
 class Settings(BaseSettings):
 
+    app_env: str = app_env
+
     logging: LoggingSettings = LoggingSettings()
 
+    # Настройки приложения
     TITLE: str = "AI Chat"
     DESCRIPTION: str = "AI Chat API"
     VERSION: str = "0.1.0"
@@ -85,13 +52,14 @@ class Settings(BaseSettings):
             "host": self.HOST,
             "port": self.PORT,
             "proxy_headers": True,
-            "log_level": "debug",
+            "log_level": self.logging.LEVEL.lower(),
         }
 
-    # Настройки логирования
-    LOG_FORMAT: str = "pretty"
-    LOG_FILE: str = "./logs/app.log" if os.name == "nt" else "/var/log/app.log"
-    LOG_LEVEL: str = "DEBUG"
+    # Настройки JWT
+    TOKEN_TYPE: str = "Bearer"
+    TOKEN_EXPIRE_MINUTES: int = 1440
+    TOKEN_ALGORITHM: str = "HS256"
+    TOKEN_SECRET_KEY: SecretStr
 
     # Настройки доступа в docs/redoc
     DOCS_ACCESS: bool = True
@@ -158,7 +126,7 @@ class Settings(BaseSettings):
         }
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=env_file_path,
         env_file_encoding="utf-8",
         env_nested_delimiter="__",
         extra="allow",
