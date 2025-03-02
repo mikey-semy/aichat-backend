@@ -6,7 +6,7 @@ import time
 import socket
 import uvicorn
 
-ENV_FILE=".env"
+ENV_FILE=".env.dev"
 # Получаем путь к корню проекта
 ROOT_DIR = Path(__file__).parents[1]
 
@@ -23,6 +23,31 @@ DEFAULT_PORTS = {
     'GRAFANA': 3334,
     'LOKI': 3100
 }
+def load_env_vars(env_file_path: str = None) -> dict:
+    """
+    Загружает переменные окружения из .env файла
+
+    Args:
+        env_file_path: Путь к файлу .env. Если None, используется ENV_FILE из констант
+
+    Returns:
+        dict: Словарь с переменными окружения
+    """
+    if env_file_path is None:
+        env_file_path = os.path.join(ROOT_DIR, ENV_FILE)
+
+    env_vars = {}
+    if os.path.exists(env_file_path):
+        with open(env_file_path, encoding="utf-8") as f:
+            for line in f:
+                if line.strip() and not line.startswith('#'):
+                    try:
+                        key, value = line.strip().split('=', 1)
+                        env_vars[key] = value
+                    except ValueError:
+                        # Пропускаем некорректные строки
+                        pass
+    return env_vars
 
 def run_compose_command(command: str | list, compose_file: str = COMPOSE_FILE_WITHOUT_BACKEND, env: dict = None) -> None:
     """Запускает docker-compose команду в корне проекта"""
@@ -31,14 +56,8 @@ def run_compose_command(command: str | list, compose_file: str = COMPOSE_FILE_WI
 
     # Обновляем переменные окружения
     environment = os.environ.copy()
-    # Добавляем переменные из ENV_FILE по умолчанию
-    env_file = os.path.join(ROOT_DIR, ENV_FILE)
-    if os.path.exists(env_file):
-        with open(env_file) as f:
-            for line in f:
-                if line.strip() and not line.startswith('#'):
-                    key, value = line.strip().split('=', 1)
-                    environment[key] = value
+    # Добавляем переменные из ENV_FILE
+    environment.update(load_env_vars())
     if env:
         environment.update(env)
 
@@ -94,10 +113,10 @@ def check_services():
     """Проверяет доступность всех сервисов"""
     services_config = {
         'Redis': ('REDIS_PORT', 5),
-        'RabbitMQ': ('RABBITMQ_UI_PORT', 5),
+        # 'RabbitMQ': ('RABBITMQ_UI_PORT', 5),
         'PostgreSQL': ('POSTGRES_PORT', 30),
-        'Grafana': ('GRAFANA_PORT', 5),
-        'Loki': ('LOKI_PORT', 5)
+        # 'Grafana': ('GRAFANA_PORT', 5),
+        # 'Loki': ('LOKI_PORT', 5)
     }
 
     for service_name, (port_key, retries) in services_config.items():
@@ -106,6 +125,82 @@ def check_services():
             print(f"❌ {service_name} не доступен на порту {port}!")
             return False
     return True
+
+def get_postgres_container_name() -> str:
+    """
+    Находит имя контейнера PostgreSQL
+
+    Returns:
+        str: Имя контейнера PostgreSQL
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--filter", "name=postgres", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        containers = [name for name in result.stdout.strip().split('\n') if name]
+        if not containers:
+            raise ValueError("Контейнер PostgreSQL не найден!")
+        return containers[0]  # Берем первый найденный контейнер
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Ошибка при поиске контейнера PostgreSQL: {e}")
+        raise
+
+def create_database():
+    """
+    Создание базы данных, если она не существует
+    """
+    print("🛠️ Проверяем наличие базы данных...")
+
+    # Получаем данные из переменных окружения
+    db_config = load_env_vars()
+
+    # Получаем имя контейнера PostgreSQL динамически
+    try:
+        postgres_container = get_postgres_container_name()
+        print(f"🔍 Найден контейнер PostgreSQL: {postgres_container}")
+    except Exception as e:
+        print(f"❌ Не удалось найти контейнер PostgreSQL: {e}")
+        raise
+
+    # Извлекаем настройки БД с безопасными значениями по умолчанию
+    user = db_config.get('POSTGRES_USER', 'postgres')
+    password = db_config.get('POSTGRES_PASSWORD', '')
+    db_name = db_config.get('POSTGRES_DB', 'aichat_db')
+
+    # Команда для проверки существования базы данных
+    check_db_cmd = [
+        "docker", "exec", "-i", postgres_container,
+        "psql", "-U", user, "-c",
+        f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';"
+    ]
+
+    try:
+        result = subprocess.run(
+            check_db_cmd,
+            capture_output=True,
+            text=True
+        )
+
+        if "1 row" in result.stdout:
+            print(f"✅ База данных {db_name} уже существует!")
+        else:
+            print(f"🛠️ База данных {db_name} не найдена, создаём...")
+            create_cmd = [
+                "docker", "exec", "-i", "postgres",
+                "psql", "-U", user, "-c",
+                f"CREATE DATABASE {db_name};"
+            ]
+            subprocess.run(create_cmd, check=True)
+            print(f"✅ База данных {db_name} создана!")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Ошибка при проверке/создании базы данных: {e}")
+        print(f"Вывод: {e.stdout if hasattr(e, 'stdout') else 'Недоступно'}")
+        print(f"Ошибка: {e.stderr if hasattr(e, 'stderr') else 'Недоступно'}")
+        raise
+
 
 def start_infrastructure():
     print("🚀 Запускаем инфраструктуру...")
@@ -130,6 +225,9 @@ def start_infrastructure():
         }
 
         run_compose_command(["up", "-d"], COMPOSE_FILE_WITHOUT_BACKEND, env=env)
+
+        print("⏳ Ждём 5 секунд для полной инициализации PostgreSQL...")
+        time.sleep(5)
 
         # Ждем доступности сервисов
         check_services()
@@ -165,8 +263,8 @@ def dev(port: Optional[int] = None):
     """
 
     # Запускаем инфраструктуру
-    # if not start_infrastructure():
-    #     return
+    if not start_infrastructure():
+        return
 
     if port is None:
         port = find_free_port()
@@ -206,6 +304,9 @@ def migrate():
     """
     Запуск миграций.
     """
+    # Сначала создаем базу данных, если она не существует
+    create_database()
+
     subprocess.run(["alembic", "upgrade", "head"], check=True)
 
 def format():

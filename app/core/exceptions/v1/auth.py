@@ -19,3 +19,9 @@ class AuthenticationError(BaseAPIException):
             error_type="auth_error",
             extra=extra,
         )
+
+class InvalidCredentialsError(AuthenticationError):
+    """Неверные учетные данные"""
+
+    def __init__(self):
+        super().__init__(message="🔐 Неверный email или пароль")

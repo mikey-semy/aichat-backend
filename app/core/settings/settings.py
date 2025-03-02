@@ -1,6 +1,7 @@
+import logging
 from typing import Any, Dict, List
 
-from pydantic import PostgresDsn, SecretStr
+from pydantic import SecretStr, RedisDsn, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,8 +11,10 @@ from app.core.settings.paths import PathConfig
 
 env_file_path, app_env = PathConfig.get_env_file_and_type()
 
+logger = logging.getLogger(__name__)
 class Settings(BaseSettings):
 
+    # Виртуальное окружение приложения
     app_env: str = app_env
 
     logging: LoggingSettings = LoggingSettings()
@@ -66,12 +69,6 @@ class Settings(BaseSettings):
     DOCS_USERNAME: str = "admin"
     DOCS_PASSWORD: SecretStr = "admin"
 
-    # Настройки CORS
-    ALLOW_ORIGINS: List[str] = []
-    ALLOW_CREDENTIALS: bool = True
-    ALLOW_METHODS: List[str] = ["*"]
-    ALLOW_HEADERS: List[str] = ["*"]
-
     # Настройки базы данных
     POSTGRES_USER: str
     POSTGRES_PASSWORD: SecretStr
@@ -81,7 +78,7 @@ class Settings(BaseSettings):
 
     @property
     def database_dsn(self) -> PostgresDsn:
-        return PostgresDsn.build(
+        database_dsn = PostgresDsn.build(
             scheme="postgresql+asyncpg",
             username=self.POSTGRES_USER,
             password=self.POSTGRES_PASSWORD.get_secret_value(),
@@ -89,13 +86,17 @@ class Settings(BaseSettings):
             port=self.POSTGRES_PORT,
             path=self.POSTGRES_DB,
         )
+        return database_dsn
 
     @property
     def database_url(self) -> str:
         """
         Для alembic нужно строку с подключением к БД
         """
-        return str(self.database_dsn)
+        database_dsn = str(self.database_dsn)
+        return database_dsn
+
+
 
     @property
     def database_params(self) -> Dict[str, Any]:
@@ -109,6 +110,63 @@ class Settings(BaseSettings):
             "class_": AsyncSession,
             "echo": True,
         }
+
+    # Настройки Yandex GPT
+    YANDEX_PRE_INSTRUCTIONS: str = "Ты - помощник, который помогает пользователю решать задачи по программированию."
+    YANDEX_TEMPERATURE: float = 0.6
+    YANDEX_MAX_TOKENS: int = 2000
+    YANDEX_MODEL_NAME: str = "yandexgpt-lite"
+    YANDEX_API_URL: str = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+    YANDEX_API_KEY: SecretStr
+    YANDEX_PRIVATE_KEY: SecretStr
+    YANDEX_KEY_ID: SecretStr
+    YANDEX_FOLDER_ID: SecretStr
+
+    @property
+    def yandex_model_uri(self) -> str:
+        """
+        Формирует URI модели Yandex GPT.
+
+        Returns:
+            str: URI в формате gpt://{folder_id}/{model_name}
+        """
+        return f"gpt://{self.YANDEX_FOLDER_ID}/{self.YANDEX_MODEL_NAME}"
+
+    # Настройки Redis
+    REDIS_USER: str = "default"
+    REDIS_PASSWORD: SecretStr
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_POOL_SIZE: int = 10
+
+    @property
+    def redis_dsn(self) -> RedisDsn:
+        return RedisDsn.build(
+            scheme="redis",
+            username=self.REDIS_USER,
+            password=self.REDIS_PASSWORD.get_secret_value(),
+            host=self.REDIS_HOST,
+            port=self.REDIS_PORT,
+            path=f"/{self.REDIS_DB}"
+        )
+
+    @property
+    def redis_url(self) -> str:
+        return str(self.redis_dsn)
+
+    @property
+    def redis_params(self) -> Dict[str, Any]:
+        return {
+            "url": self.redis_url,
+            "pool_size": self.REDIS_POOL_SIZE
+        }
+
+    # Настройки CORS
+    ALLOW_ORIGINS: List[str] = []
+    ALLOW_CREDENTIALS: bool = True
+    ALLOW_METHODS: List[str] = ["*"]
+    ALLOW_HEADERS: List[str] = ["*"]
 
     @property
     def cors_params(self) -> Dict[str, Any]:
