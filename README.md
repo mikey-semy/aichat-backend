@@ -85,18 +85,18 @@ git commit -m "feat: your-changes"
  1) Переключаемся обратно на dev
  2) Подтягиваем новые изменения
  3) Возвращаемся на свою ветку
- 4) Переносим свои изменения поверх последней версии `dev`:
+ 4) Переносим свои изменения поверх последней версии `dev`
+ 5)
 ```bash
 git checkout dev
 git pull origin dev
 git checkout feature/your-name-of-feature
 git rebase dev
-
 ```
 
 6. Отправляем свою ветку в удалённый репозиторий:
 ```bash
-git push origin feature/your-name-of-feature
+git push origin feature/your-name-of-feature --force-with-lease
 ```
 
 7. Создаем Pull Request в dev ветку!
@@ -107,12 +107,36 @@ git push origin feature/your-name-of-feature
 > 5) Добавляем ревьюеров
 > 6) Создаёи PR
 
+Либо просто делаем merge в dev ветку из своей feature/your-name-of-feature ветки.
+```bash
+git checkout dev
+git merge feature/your-name-of-feature
+```
+
 8. После тестирования на `dev`, создаём PR из `dev` в `main`.
 > 1) Создаём новый PR
 > 2) В base выбираем main (КУДА льём)
 > 3) В compare выбираем dev (ОТКУДА льём)
 > 4) Описываем все изменения которые войдут в прод
 > 6) Ждём подтверждения от тимлида
+
+Либо просто делаем merge в main ветку из dev ветки.
+```bash
+git checkout main
+git merge dev
+```
+
+9. Удаляем свою ветку feature/your-name-of-feature
+
+Локально:
+
+```bash
+git branch -d feature/your-name-of-feature
+```
+Удалённо:
+```bash
+git push origin --delete feature/your-name-of-feature
+```
 
 ## Контакты
 Если у вас есть вопросы или предложения, вы можете обратиться по адресу telegram: [@mikey_semi](https://t.me/mikey_semi).
