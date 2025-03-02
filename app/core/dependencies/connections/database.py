@@ -19,13 +19,14 @@ class DatabaseClient(BaseClient):
 
     def _create_engine(self) -> AsyncEngine:
         """Создает движок SQLAlchemy"""
+        database_url = str(self._settings.database_dsn)
         return create_async_engine(
-            self._settings.database_dsn, **self._settings.database_params
+            database_url, **self._settings.engine_params
         )
 
     def _create_session_factory(self) -> async_sessionmaker:
         """Создает фабрику сессий"""
-        return async_sessionmaker(bind=self._engine, **self._settings.database_params)
+        return async_sessionmaker(bind=self._engine, **self._settings.session_params)
 
     async def connect(self) -> async_sessionmaker:
         """Инициализирует подключение к БД"""

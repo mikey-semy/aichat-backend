@@ -28,7 +28,7 @@ class ChatHttpClient(BaseHttpClient):
             "Content-Type": "application/json",
         }
 
-        if not settings.YANDEX_API_KEY:
+        if not settings.YANDEX_API_KEY.get_secret_value():
             raise ChatAuthError("API ключ не задан")
 
         chat_request.modelUri = settings.yandex_model_uri

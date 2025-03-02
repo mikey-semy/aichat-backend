@@ -14,7 +14,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """
     async with DatabaseContextManager() as session:
         try:
-            yield session.session
+            yield session
             # Автоматический коммит при успешном выполнении
             await session.commit()
         except Exception:

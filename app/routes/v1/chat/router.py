@@ -1,7 +1,7 @@
 from fastapi import Form, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies.providers.database import get_session
-from app.core.dependencies.providers.cache import get_redis_storage
+from app.core.dependencies.providers.cache import get_chat_redis_storage
 from app.core.cache.chat import ChatRedisStorage
 from app.schemas import ChatResponse
 from app.services import ChatService
@@ -17,7 +17,7 @@ class ChatRouter(BaseRouter):
             message: str = Form(...),
             # current_user: UserCredentialsSchema = Depends(get_current_user),
             db_session: AsyncSession = Depends(get_session),
-            redis_storage: ChatRedisStorage = Depends(get_redis_storage),
+            chat_redis_storage: ChatRedisStorage = Depends(get_chat_redis_storage),
         ) -> ChatResponse:
             """
             # Получение ответа от YandexGPT
@@ -58,5 +58,5 @@ class ChatRouter(BaseRouter):
             }
             ```
             """
-            chat_service = ChatService(db_session, redis_storage)
+            chat_service = ChatService(db_session, chat_redis_storage)
             return await chat_service.get_completion(message)#, current_user.id)

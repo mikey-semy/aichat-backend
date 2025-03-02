@@ -96,19 +96,25 @@ class Settings(BaseSettings):
         database_dsn = str(self.database_dsn)
         return database_dsn
 
-
+    @property
+    def engine_params(self) -> Dict[str, Any]:
+        """
+        Формирует параметры для создания SQLAlchemy engine
+        """
+        return {
+            "echo": True,
+        }
 
     @property
-    def database_params(self) -> Dict[str, Any]:
+    def session_params(self) -> Dict[str, Any]:
         """
-        Формирует параметры подключения к БД для SQLAlchemy
+        Формирует параметры для создания SQLAlchemy session
         """
         return {
             "autocommit": False,
             "autoflush": False,
             "expire_on_commit": False,
             "class_": AsyncSession,
-            "echo": True,
         }
 
     # Настройки Yandex GPT
@@ -130,7 +136,7 @@ class Settings(BaseSettings):
         Returns:
             str: URI в формате gpt://{folder_id}/{model_name}
         """
-        return f"gpt://{self.YANDEX_FOLDER_ID}/{self.YANDEX_MODEL_NAME}"
+        return f"gpt://{self.YANDEX_FOLDER_ID.get_secret_value()}/{self.YANDEX_MODEL_NAME}"
 
     # Настройки Redis
     REDIS_USER: str = "default"
@@ -159,7 +165,7 @@ class Settings(BaseSettings):
     def redis_params(self) -> Dict[str, Any]:
         return {
             "url": self.redis_url,
-            "pool_size": self.REDIS_POOL_SIZE
+            "max_connections": self.REDIS_POOL_SIZE
         }
 
     # Настройки CORS

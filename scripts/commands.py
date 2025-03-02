@@ -165,41 +165,54 @@ def create_database():
         print(f"❌ Не удалось найти контейнер PostgreSQL: {e}")
         raise
 
-    # Извлекаем настройки БД с безопасными значениями по умолчанию
+    # Извлекаем настройки БД
     user = db_config.get('POSTGRES_USER', 'postgres')
-    password = db_config.get('POSTGRES_PASSWORD', '')
+    host = db_config.get('POSTGRES_HOST', 'localhost')
+    port = db_config.get('POSTGRES_PORT', '5432')
     db_name = db_config.get('POSTGRES_DB', 'aichat_db')
 
-    # Команда для проверки существования базы данных
-    check_db_cmd = [
-        "docker", "exec", "-i", postgres_container,
-        "psql", "-U", user, "-c",
-        f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';"
-    ]
+    # Выполняем двойную проверку - внутри контейнера и через локальный порт
+    check_db_inside = subprocess.run(
+        ["docker", "exec", "-i", postgres_container, "psql", "-U", user,"-c",
+         f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';"],
+        capture_output=True, text=True
+    )
 
+    if "1 row" not in check_db_inside.stdout:
+        print(f"🛠️ База данных {db_name} не найдена внутри контейнера, создаём...")
+        create_cmd = [
+            "docker", "exec", "-i", postgres_container, "psql", "-U", user,"-c",
+            f"CREATE DATABASE {db_name};"
+        ]
+        subprocess.run(create_cmd, check=True)
+        print(f"✅ База данных {db_name} создана внутри контейнера!")
+    else:
+        print(f"✅ База данных {db_name} существует внутри контейнера!")
+
+    # Важно: проверка доступности через локальный порт
+    # Выводим команду DSN для отладки
+    dsn = f"postgresql://{user}:*******@{host}:{port}/{db_name}"
+    print(f"🔄 Проверяем подключение к БД через: {dsn} (пароль скрыт)")
+
+    # Проверяем, что порт 5432 проброшен наружу
     try:
-        result = subprocess.run(
-            check_db_cmd,
-            capture_output=True,
-            text=True
+        # Получаем информацию о проброшенных портах
+        port_info = subprocess.run(
+            ["docker", "port", postgres_container],
+            capture_output=True, text=True, check=True
         )
+        print(f"📊 Информация о портах: {port_info.stdout}")
 
-        if "1 row" in result.stdout:
-            print(f"✅ База данных {db_name} уже существует!")
-        else:
-            print(f"🛠️ База данных {db_name} не найдена, создаём...")
-            create_cmd = [
-                "docker", "exec", "-i", "postgres",
-                "psql", "-U", user, "-c",
-                f"CREATE DATABASE {db_name};"
-            ]
-            subprocess.run(create_cmd, check=True)
-            print(f"✅ База данных {db_name} создана!")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Ошибка при проверке/создании базы данных: {e}")
-        print(f"Вывод: {e.stdout if hasattr(e, 'stdout') else 'Недоступно'}")
-        print(f"Ошибка: {e.stderr if hasattr(e, 'stderr') else 'Недоступно'}")
-        raise
+        if f"5432/tcp -> 0.0.0.0:{port}" not in port_info.stdout:
+            print(f"⚠️ Порт {port} не проброшен корректно! Настрой docker-compose.yml")
+
+    except Exception as e:
+        print(f"⚠️ Не удалось проверить порты: {e}")
+
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка при работе с базой данных: {e}")
+        return False
 
 
 def start_infrastructure():
