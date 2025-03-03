@@ -1,13 +1,15 @@
 import logging
-
+from typing import Optional
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
-from app.core.integrations.yandex_gpt.text import ChatHttpClient
-from app.core.cache.chat import ChatRedisStorage
+from app.core.integrations.http.yandex_gpt.text import ChatHttpClient
+from app.core.integrations.cache.chat import ChatRedisStorage
 from app.schemas import (ChatRequest, ChatResponse, CompletionOptions,
-                         Message, MessageRole)
+                         Message, MessageRole, ModelType)
 from app.services.v1.base import BaseService
+from app.models import UserSettingsModel
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,9 @@ class ChatService(BaseService):
     async def get_completion(
         self, message: str,
         user_id: int = 1, # временно, пока нет авторизации
+        model_type: Optional[ModelType] = None,
         role: MessageRole = MessageRole.USER
+
     ) -> ChatResponse:
         """
         Получает ответ от модели на основе истории сообщений
@@ -48,6 +52,15 @@ class ChatService(BaseService):
             AIChatResponse: Ответ от модели
         """
         try:
+
+            # Если модель не указана, получаем её из настроек пользователя
+            if model_type is None:
+                # Получаем настройки пользователя из БД
+                user_settings = await self.get_user_settings(user_id)
+                model_type = user_settings.preferred_model
+
+                # В зависимости от выбранной модели формируем model_uri
+                model_uri = self.get_model_uri(model_type)
             # Получаем историю
             message_history = await self.storage.get_chat_history(user_id)
 
@@ -61,7 +74,7 @@ class ChatService(BaseService):
             messages = [self.SYSTEM_MESSAGE] + message_history
 
             request = ChatRequest(
-                modelUri=settings.yandex_model_uri,
+                modelUri=model_uri,
                 completionOptions=CompletionOptions(maxTokens=str(self.max_tokens)),
                 messages=messages,
             )
@@ -85,3 +98,48 @@ class ChatService(BaseService):
             logger.error("Error in get_completion: %s", str(e))
             await self.storage.clear_chat_history(user_id)
             raise
+
+    def get_model_uri(self, model_type: ModelType) -> str:
+        """Формирует URI модели в зависимости от типа"""
+        folder_id = settings.YANDEX_FOLDER_ID.get_secret_value()
+
+        # Маппинг типов моделей на имена моделей
+        model_mapping = {
+            ModelType.YANDEX_GPT_LITE: "yandexgpt-lite",
+            ModelType.YANDEX_GPT_PRO: "yandexgpt",
+            ModelType.YANDEX_GPT_PRO_32K: "yandexgpt-32k",
+            ModelType.LLAMA_8B: "llama-lite",
+            ModelType.LLAMA_70B: "llama",
+            ModelType.CUSTOM: "custom"  # Для кастомной модели нужна отдельная  логика
+        }
+
+        model_name = model_mapping.get(model_type, "llama")  # По умолчанию llama
+        model_version = settings.YANDEX_MODEL_VERSION
+
+        return f"gpt://{folder_id}/{model_name}/{model_version}"
+
+    async def get_user_settings(self, user_id: int) -> UserSettingsModel:
+        """
+        Получает настройки пользователя или создаёт их, если не существуют
+
+        Args:
+            user_id: Идентификатор пользователя
+
+        Returns:
+            UserSettingsModel: Настройки пользователя
+
+        TODO:
+            - Перенести в data_manager
+        """
+        user_settings = await self.session.execute(
+            select(UserSettingsModel).where(UserSettingsModel.user_id == user_id)
+        )
+        user_settings = user_settings.scalars().first()
+
+        if not user_settings:
+            # Создаём настройки со значениями по умолчанию
+            user_settings = UserSettingsModel(user_id=user_id)
+            self.session.add(user_settings)
+            await self.session.commit()
+
+        return user_settings

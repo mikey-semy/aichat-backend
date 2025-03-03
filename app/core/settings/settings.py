@@ -118,10 +118,11 @@ class Settings(BaseSettings):
         }
 
     # Настройки Yandex GPT
-    YANDEX_PRE_INSTRUCTIONS: str = "Ты - помощник, который помогает пользователю решать задачи по программированию."
+    YANDEX_PRE_INSTRUCTIONS: str = "Ты ассистент, помогающий пользователю."
     YANDEX_TEMPERATURE: float = 0.6
     YANDEX_MAX_TOKENS: int = 2000
-    YANDEX_MODEL_NAME: str = "yandexgpt-lite"
+    YANDEX_MODEL_NAME: str = "llama"
+    YANDEX_MODEL_VERSION: str = "rc"
     YANDEX_API_URL: str = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
     YANDEX_API_KEY: SecretStr
     YANDEX_PRIVATE_KEY: SecretStr
@@ -134,9 +135,9 @@ class Settings(BaseSettings):
         Формирует URI модели Yandex GPT.
 
         Returns:
-            str: URI в формате gpt://{folder_id}/{model_name}
+            str: URI в формате gpt://{folder_id}/{model_name}/{model_version}
         """
-        return f"gpt://{self.YANDEX_FOLDER_ID.get_secret_value()}/{self.YANDEX_MODEL_NAME}"
+        return f"gpt://{self.YANDEX_FOLDER_ID.get_secret_value()}/{self.YANDEX_MODEL_NAME}/{self.YANDEX_MODEL_VERSION}"
 
     # Настройки Redis
     REDIS_USER: str = "default"
