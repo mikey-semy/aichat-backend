@@ -1,3 +1,3 @@
-from .v1.chat import ChatService
+from .v1.chat.service import ChatService
 
 __all__ = ["ChatService"]

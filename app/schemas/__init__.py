@@ -4,7 +4,7 @@ from .v1.base import (BaseInputSchema, BaseResponseSchema, BaseSchema,
                       ItemResponseSchema, ListResponseSchema)
 from .v1.pagination import Page, PaginationParams
 from .v1.users.schema import UserCredentialsSchema
-from .v1.chat.chat import (ChatRequest, ChatResponse,
+from .v1.chat.schema import (ChatRequest, ChatResponse,
                                CompletionOptions, Message, MessageRole,
                                ModelPricing, ModelType, ModelVersion, Result)
 
