@@ -239,8 +239,8 @@ def start_infrastructure():
 
         run_compose_command(["up", "-d"], COMPOSE_FILE_WITHOUT_BACKEND, env=env)
 
-        print("⏳ Ждём 5 секунд для полной инициализации PostgreSQL...")
-        time.sleep(5)
+        # print("⏳ Ждём 5 секунд для полной инициализации PostgreSQL...")
+        # time.sleep(5)
 
         # Ждем доступности сервисов
         check_services()
@@ -318,7 +318,7 @@ def migrate():
     Запуск миграций.
     """
     # Сначала создаем базу данных, если она не существует
-    create_database()
+    # create_database()
 
     subprocess.run(["alembic", "upgrade", "head"], check=True)
 
