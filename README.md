@@ -86,7 +86,7 @@ git commit -m "feat: your-changes"
  2) Подтягиваем новые изменения
  3) Возвращаемся на свою ветку
  4) Переносим свои изменения поверх последней версии `dev`
- 5)
+
 ```bash
 git checkout dev
 git pull origin dev
