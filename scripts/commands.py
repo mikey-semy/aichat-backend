@@ -125,15 +125,25 @@ def check_services():
             print(f"❌ {service_name} не доступен на порту {port}!")
             return False
     return True
-
+    
 def get_postgres_container_name() -> str:
     """
-    Находит имя контейнера PostgreSQL
+    Находит имя контейнера PostgreSQL или возвращает стандартное имя
 
     Returns:
-        str: Имя контейнера PostgreSQL
+        str: Имя контейнера PostgreSQL или стандартное имя
     """
     try:
+        # Проверяем, доступен ли Docker
+        which_result = subprocess.run(
+            ["which", "docker"],
+            capture_output=True,
+            text=True
+        )
+        if which_result.returncode != 0:
+            print("ℹ️ Docker не найден, используем прямое подключение к PostgreSQL")
+            return "postgres"  # Стандартное имя для прямого подключения
+            
         result = subprocess.run(
             ["docker", "ps", "--filter", "name=postgres", "--format", "{{.Names}}"],
             capture_output=True,
@@ -142,11 +152,15 @@ def get_postgres_container_name() -> str:
         )
         containers = [name for name in result.stdout.strip().split('\n') if name]
         if not containers:
-            raise ValueError("Контейнер PostgreSQL не найден!")
+            print("⚠️ Контейнер PostgreSQL не найден через Docker, используем прямое подключение")
+            return "postgres"
         return containers[0]  # Берем первый найденный контейнер
     except subprocess.CalledProcessError as e:
-        print(f"❌ Ошибка при поиске контейнера PostgreSQL: {e}")
-        raise
+        print(f"⚠️ Ошибка при поиске контейнера PostgreSQL через Docker: {e}")
+        return "postgres"
+    except Exception as e:
+        print(f"⚠️ Непредвиденная ошибка: {e}")
+        return "postgres"
 
 def create_database():
     """
@@ -158,57 +172,70 @@ def create_database():
     db_config = load_env_vars()
 
     # Получаем имя контейнера PostgreSQL динамически
-    try:
-        postgres_container = get_postgres_container_name()
-        print(f"🔍 Найден контейнер PostgreSQL: {postgres_container}")
-    except Exception as e:
-        print(f"❌ Не удалось найти контейнер PostgreSQL: {e}")
-        raise
+    postgres_container = get_postgres_container_name()
+    print(f"🔍 Используем PostgreSQL: {postgres_container}")
 
     # Извлекаем настройки БД
     user = db_config.get('POSTGRES_USER', 'postgres')
+    password = db_config.get('POSTGRES_PASSWORD', '')
     host = db_config.get('POSTGRES_HOST', 'localhost')
     port = db_config.get('POSTGRES_PORT', '5432')
     db_name = db_config.get('POSTGRES_DB', 'aichat_db')
 
-    # Выполняем двойную проверку - внутри контейнера и через локальный порт
-    check_db_inside = subprocess.run(
-        ["docker", "exec", "-i", postgres_container, "psql", "-U", user,"-c",
-         f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';"],
-        capture_output=True, text=True
-    )
-
-    if "1 row" not in check_db_inside.stdout:
-        print(f"🛠️ База данных {db_name} не найдена внутри контейнера, создаём...")
-        create_cmd = [
-            "docker", "exec", "-i", postgres_container, "psql", "-U", user,"-c",
-            f"CREATE DATABASE {db_name};"
-        ]
-        subprocess.run(create_cmd, check=True)
-        print(f"✅ База данных {db_name} создана внутри контейнера!")
-    else:
-        print(f"✅ База данных {db_name} существует внутри контейнера!")
-
-    # Важно: проверка доступности через локальный порт
-    # Выводим команду DSN для отладки
-    dsn = f"postgresql://{user}:*******@{host}:{port}/{db_name}"
-    print(f"🔄 Проверяем подключение к БД через: {dsn} (пароль скрыт)")
-
-    # Проверяем, что порт 5432 проброшен наружу
     try:
-        # Получаем информацию о проброшенных портах
-        port_info = subprocess.run(
-            ["docker", "port", postgres_container],
-            capture_output=True, text=True, check=True
-        )
-        print(f"📊 Информация о портах: {port_info.stdout}")
+        # Проверяем, доступен ли Docker
+        which_docker = subprocess.run(["which", "docker"], capture_output=True)
+        docker_available = which_docker.returncode == 0
+        
+        if docker_available:
+            # Метод с использованием Docker
+            check_db_inside = subprocess.run(
+                ["docker", "exec", "-i", postgres_container, "psql", "-U", user, "-c",
+                f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';"],
+                capture_output=True, text=True
+            )
 
-        if f"5432/tcp -> 0.0.0.0:{port}" not in port_info.stdout:
-            print(f"⚠️ Порт {port} не проброшен корректно! Настрой docker-compose.yml")
-
-    except Exception as e:
-        print(f"⚠️ Не удалось проверить порты: {e}")
-
+            if "1 row" not in check_db_inside.stdout:
+                print(f"🛠️ База данных {db_name} не найдена внутри контейнера, создаём...")
+                create_cmd = [
+                    "docker", "exec", "-i", postgres_container, "psql", "-U", user, "-c",
+                    f"CREATE DATABASE {db_name};"
+                ]
+                subprocess.run(create_cmd, check=True)
+                print(f"✅ База данных {db_name} создана внутри контейнера!")
+            else:
+                print(f"✅ База данных {db_name} существует внутри контейнера!")
+        else:
+            # Прямое подключение через psql
+            print(f"🔄 Проверяем БД напрямую через psql...")
+            
+            # Формируем команду для проверки существования БД
+            psql_command = f"psql -U {user} -h {host} -p {port}"
+            if password:
+                # Установка переменной окружения PGPASSWORD для передачи пароля
+                env = os.environ.copy()
+                env["PGPASSWORD"] = password
+            else:
+                env = os.environ.copy()
+                
+            # Проверяем существование БД
+            check_db = subprocess.run(
+                f"{psql_command} -c \"SELECT 1 FROM pg_database WHERE datname = '{db_name}';\"",
+                shell=True, env=env, capture_output=True, text=True
+            )
+            
+            if "1 row" not in check_db.stdout:
+                print(f"🛠️ База данных {db_name} не найдена, создаём...")
+                create_cmd = f"{psql_command} -c \"CREATE DATABASE {db_name};\""
+                subprocess.run(create_cmd, shell=True, env=env, check=True)
+                print(f"✅ База данных {db_name} создана!")
+            else:
+                print(f"✅ База данных {db_name} существует!")
+                
+        # Выводим информацию о подключении
+        dsn = f"postgresql://{user}:*******@{host}:{port}/{db_name}"
+        print(f"🔄 Информация о подключении к БД: {dsn} (пароль скрыт)")
+        
         return True
     except Exception as e:
         print(f"❌ Ошибка при работе с базой данных: {e}")
