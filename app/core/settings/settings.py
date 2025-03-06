@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List
 
-from pydantic import SecretStr, RedisDsn, PostgresDsn
+from pydantic import SecretStr, AmqpDsn, PostgresDsn, RedisDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from app.core.settings.paths import PathConfig
 env_file_path, app_env = PathConfig.get_env_file_and_type()
 
 logger = logging.getLogger(__name__)
+
 class Settings(BaseSettings):
 
     # Виртуальное окружение приложения
@@ -168,6 +169,67 @@ class Settings(BaseSettings):
             "max_connections": self.REDIS_POOL_SIZE
         }
 
+    # Настройки RabbitMQ
+    RABBITMQ_CONNECTION_TIMEOUT: int = 30
+    RABBITMQ_EXCHANGE: str = "crm"
+    RABBITMQ_USER: str
+    RABBITMQ_PASSWORD: SecretStr
+    RABBITMQ_HOST: str = "localhost"
+    RABBITMQ_PORT: int = 5672
+
+    @property
+    def rabbitmq_dsn(self) -> AmqpDsn:
+        return AmqpDsn.build(
+            scheme="amqp",
+            username=self.RABBITMQ_USER,
+            password=self.RABBITMQ_PASSWORD.get_secret_value(),
+            host=self.RABBITMQ_HOST,
+            port=self.RABBITMQ_PORT
+        )
+
+    @property
+    def rabbitmq_url(self) -> str:
+        """
+        Для pika нужно строку с подключением к RabbitMQ
+        """
+        return str(self.rabbitmq_dsn)
+
+    @property
+    def rabbitmq_params(self) -> Dict[str, Any]:
+        """
+        Формирует параметры подключения к RabbitMQ.
+
+        Returns:
+            Dict с параметрами подключения к RabbitMQ
+        """
+        return {
+            "url": self.rabbitmq_url,
+            "connection_timeout": self.RABBITMQ_CONNECTION_TIMEOUT,
+            "exchange": self.RABBITMQ_EXCHANGE,
+        }
+
+    # Настройки AWS
+    AWS_SERVICE: str = "s3"
+    AWS_REGION: str = "ru-central1"
+    AWS_ENDPOINT: str
+    AWS_BUCKET: str = "crm-bucket"
+    AWS_ACCESS_KEY: SecretStr
+    AWS_SECRET_KEY: SecretStr
+
+    @property
+    def s3_params(self) -> Dict[str, Any]:
+        """
+        Формирует информацию о конфигурации S3.
+        """
+        return {
+            "aws_service_name": self.AWS_SERVICE,
+            "aws_region": self.AWS_REGION,
+            "aws_endpoint": self.AWS_ENDPOINT,
+            "aws_bucket_name": self.AWS_BUCKET,
+            "aws_access_key_id": self.AWS_ACCESS_KEY,
+            "aws_secret_access_key": self.AWS_SECRET_KEY,
+        }
+        
     # Настройки CORS
     ALLOW_ORIGINS: List[str] = []
     ALLOW_CREDENTIALS: bool = True
