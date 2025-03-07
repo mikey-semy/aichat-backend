@@ -4,19 +4,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException
 from starlette.websockets import WebSocketDisconnect
-
+from app.core.middlewares.auth import LastActivityMiddleware
 from app.core.middlewares.docs_auth import DocsAuthMiddleware
 from app.core.middlewares.logging import LoggingMiddleware
 from app.core.logging import setup_logging
 from app.core.settings import settings
-from app.core.exceptions import AuthenticationError, BaseAPIException
-from app.core.handlers import (api_exception_handler, auth_exception_handler,
-                               http_exception_handler,
-                               internal_exception_handler,
-                               validation_exception_handler,
-                               websocket_exception_handler)
+from app.core.exceptions import AuthenticationError, BaseAPIException, 
+                                api_exception_handler, auth_exception_handler,
+                                http_exception_handler, internal_exception_handler,
+                                validation_exception_handler, websocket_exception_handler
 from app.routes.main import MainRouter
-from app.routes.v1.api import APIv1
+from app.routes.v1 import APIv1
 
 
 def create_application() -> FastAPI:
@@ -37,6 +35,7 @@ def create_application() -> FastAPI:
     app.add_exception_handler(Exception, internal_exception_handler)
 
     # Добавляем middleware в порядке выполнения
+    app.add_middleware(LastActivityMiddleware)
     app.add_middleware(LoggingMiddleware)  # Логирование запросов
     app.add_middleware(DocsAuthMiddleware)  # Защита документации
     app.add_middleware(CORSMiddleware, **settings.cors_params)  # CORS политики

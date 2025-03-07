@@ -26,6 +26,7 @@ class ChatHttpClient(BaseHttpClient):
         headers = {
             "Authorization": f"Api-Key {settings.YANDEX_API_KEY.get_secret_value()}",
             "Content-Type": "application/json",
+            "x-data-logging-enabled": "false"
         }
 
         if not settings.YANDEX_API_KEY.get_secret_value():

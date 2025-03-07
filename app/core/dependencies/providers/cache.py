@@ -1,8 +1,8 @@
 from typing import AsyncGenerator
 from fastapi import Depends
 from redis import Redis
-from app.core.cache.base import BaseRedisStorage
-from app.core.cache.chat import ChatRedisStorage
+from app.core.integrations.cache.base import BaseRedisStorage
+from app.core.integrations.cache.chat import ChatRedisStorage
 from app.core.dependencies.connections.cache import RedisClient
 
 async def get_session() -> AsyncGenerator[Redis, None]:

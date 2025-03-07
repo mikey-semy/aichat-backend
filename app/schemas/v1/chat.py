@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field
 
@@ -154,3 +154,4 @@ class ChatResponse(BaseResponseSchema):
 
     success: bool = True
     result: Result
+    message: Optional[str] = Field(default=None, exclude=True)
