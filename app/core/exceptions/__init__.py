@@ -7,13 +7,24 @@ Example:
     >>> from app.core.exceptions import UserNotFoundError, UserExistsError
     >>> raise UserNotFoundError(user_id=42)
 """
-
+from .handlers import (api_exception_handler, auth_exception_handler,
+                               http_exception_handler,
+                               internal_exception_handler,
+                               validation_exception_handler,
+                               websocket_exception_handler)
 from .v1.base import BaseAPIException, DatabaseError, ValueNotFoundError
-from .v1.security import (TokenExpiredError, TokenInvalidError,
-                               TokenMissingError)
-from .v1.auth import AuthenticationError, InvalidCredentialsError
+from .auth import (AuthenticationError, InvalidCredentialsError,
+                    InvalidEmailFormatError, InvalidPasswordError,
+                    WeakPasswordError, TokenExpiredError, TokenInvalidError, TokenMissingError)
 from .v1.chat import ChatAuthError, ChatCompletionError
+
 __all__ = [
+    "api_exception_handler", 
+    "auth_exception_handler",
+    "http_exception_handler",
+    "internal_exception_handler",
+    "validation_exception_handler",
+    "websocket_exception_handler",
     "BaseAPIException",
     "DatabaseError",
     "ValueNotFoundError",

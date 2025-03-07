@@ -1,4 +1,4 @@
-from ..base import BaseInputSchema
+from .base import BaseInputSchema
 
 class UserCredentialsSchema(BaseInputSchema):
     """

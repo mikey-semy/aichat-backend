@@ -5,7 +5,7 @@ from pydantic import SecretStr, RedisDsn, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.lifespan import lifespan
+from app.core.lifespan.base import lifespan
 from app.core.settings.logging import LoggingSettings
 from app.core.settings.paths import PathConfig
 
